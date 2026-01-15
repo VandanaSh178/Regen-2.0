@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+
+# Logs & data
+logs.csv
+frame.jpg
+
+# Snapshots (generated data)
+snapshots/
+
+# OS
+.DS_Store
+Thumbs.db
