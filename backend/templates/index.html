@@ -11,7 +11,6 @@
   --border:#1f2933;
   --green:#16a34a;
   --red:#dc2626;
-  --yellow:#facc15;
   --text:#e5e7eb;
   --muted:#9ca3af;
 }
@@ -23,38 +22,24 @@ body{
   color:var(--text);
 }
 
-/* CARDS */
 .card{
   background:var(--card);
   border:2px solid var(--border);
   border-radius:14px;
   padding:22px;
   margin:20px;
-  transition:0.3s;
 }
 
-/* FLASHING ALERT */
 .flash{
-  animation:flashBorder 1s infinite;
+  animation:flash 1s infinite;
   border-color:var(--red);
 }
-@keyframes flashBorder{
-  0%{box-shadow:0 0 0 var(--red)}
-  50%{box-shadow:0 0 18px var(--red)}
-  100%{box-shadow:0 0 0 var(--red)}
-}
+@keyframes flash{50%{box-shadow:0 0 18px var(--red)}}
 
-/* BADGES */
-.badge{
-  display:inline-block;
-  padding:6px 14px;
-  border-radius:6px;
-  font-size:14px;
-}
+.badge{padding:6px 14px;border-radius:6px;font-size:14px}
 .green{background:var(--green)}
 .red{background:var(--red)}
 
-/* ANALYTICS */
 .stats{
   display:grid;
   grid-template-columns:repeat(4,1fr);
@@ -67,182 +52,159 @@ body{
   padding:14px;
   text-align:center;
 }
-.stat h1{
-  margin:0;
-  font-size:28px;
-}
-.stat p{
-  margin:6px 0 0;
-  color:var(--muted);
-  font-size:13px;
-}
+.stat h1{margin:0;font-size:28px}
+.stat p{margin:6px 0 0;color:var(--muted)}
 
-/* TABLE */
 table{width:100%;border-collapse:collapse}
 td,th{padding:10px;border-bottom:1px solid var(--border)}
-.thumb{
-  width:90px;
+.thumb{width:90px;border-radius:6px;border:1px solid var(--border)}
+
+select{
+  padding:8px;
   border-radius:6px;
-  border:1px solid var(--border);
+  background:#0b1325;
+  color:#e5e7eb;
+  border:1px solid #1f2933;
 }
 </style>
 </head>
 
 <body>
 
-<!-- 🔊 ALERT SOUND -->
 <audio id="alarm">
   <source src="https://actions.google.com/sounds/v1/alarms/beep_short.ogg">
 </audio>
 
-<!-- LIVE DETECTION -->
+<!-- LIVE -->
 <div class="card" id="liveCard">
   <h2>🚨 Live Detection</h2>
   <h1 id="plate">WAITING</h1>
   <div id="alert" class="badge green">NO ALERT</div>
   <p id="time">--</p>
   <p id="confidence">Confidence: --%</p>
-  <p id="api">API: --</p>
 </div>
 
 <!-- ANALYTICS -->
 <div class="card">
   <h2>📊 Analytics</h2>
   <div class="stats">
-    <div class="stat">
-      <h1 id="statTotal">0</h1>
-      <p>Total Detections</p>
-    </div>
-    <div class="stat">
-      <h1 id="statUnique">0</h1>
-      <p>Unique Vehicles</p>
-    </div>
-    <div class="stat">
-      <h1 id="statBlacklist">0</h1>
-      <p>Blacklist Hits</p>
-    </div>
-    <div class="stat">
-      <h1 id="statAPI">OK</h1>
-      <p>API Status</p>
-    </div>
+    <div class="stat"><h1 id="statTotal">0</h1><p>Total</p></div>
+    <div class="stat"><h1 id="statUnique">0</h1><p>Unique</p></div>
+    <div class="stat"><h1 id="statBlacklist">0</h1><p>Blacklist</p></div>
+    <div class="stat"><h1 id="statAPI">OK</h1><p>API</p></div>
   </div>
 </div>
 
-<!-- LIVE CAMERA -->
+<!-- CAMERA -->
 <div class="card">
-  <h2>📷 Live Camera Feed</h2>
+  <h2>📷 Live Camera</h2>
   <img src="/video_feed" width="100%">
 </div>
 
 <!-- HISTORY -->
 <div class="card">
   <h2>📜 Detection History</h2>
+  <div style="margin-bottom:12px">
+    <select id="timeFilter">
+      <option value="5m">Last 5 Minutes</option>
+      <option value="1h">Last 1 Hour</option>
+      <option value="today">Today</option>
+      <option value="all" selected>All</option>
+    </select>
+  </div>
   <table>
     <thead>
-      <tr>
-        <th>Timestamp</th>
-        <th>Snapshot</th>
-        <th>Plate</th>
-        <th>Status</th>
-      </tr>
+      <tr><th>Timestamp</th><th>Snapshot</th><th>Plate</th><th>Status</th></tr>
     </thead>
     <tbody id="history"></tbody>
   </table>
 </div>
 
+<!-- INCIDENT TIMELINE -->
+<div class="card">
+  <h2>🧾 Incident Timeline</h2>
+  <ul id="timeline" style="list-style:none;padding-left:0"></ul>
+</div>
+
 <script>
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded",()=>{
 
-  let lastPlate = "";
+let lastPlate="";
 
-  /* 🔁 LIVE DETECTION */
-  async function refreshLatest(){
-    try{
-      const d = await fetch("/latest").then(r=>r.json());
-      if(!d.plate) return;
+async function refreshLatest(){
+  const d=await fetch("/latest").then(r=>r.json());
+  if(!d.plate) return;
 
-      plate.innerText = d.plate;
-      time.innerText = d.timestamp;
-      confidence.innerText = "Confidence: " + d.confidence + "%";
-      api.innerText = "API: " + (d.api_status || "OK");
+  plate.innerText=d.plate;
+  time.innerText=d.timestamp;
+  confidence.innerText="Confidence: "+d.confidence+"%";
 
-      const alertBox = document.getElementById("alert");
-      const liveCard = document.getElementById("liveCard");
-
-      if(d.blacklist === "YES"){
-        alertBox.innerText = "🚫 BLACKLIST ALERT";
-        alertBox.className = "badge red";
-        liveCard.classList.add("flash");
-
-        if(d.plate !== lastPlate){
-          document.getElementById("alarm").play();
-        }
-      }else{
-        alertBox.innerText = "ALLOWED";
-        alertBox.className = "badge green";
-        liveCard.classList.remove("flash");
-      }
-
-      lastPlate = d.plate;
-    }catch(e){}
+  if(d.blacklist==="YES"){
+    alert.innerText="🚫 BLACKLIST ALERT";
+    alert.className="badge red";
+    liveCard.classList.add("flash");
+    if(d.plate!==lastPlate) alarm.play();
+  }else{
+    alert.innerText="ALLOWED";
+    alert.className="badge green";
+    liveCard.classList.remove("flash");
   }
+  lastPlate=d.plate;
+}
 
-  /* 📜 HISTORY */
-  async function loadHistory(){
-    try{
-      const rows = await fetch("/history").then(r=>r.json());
-      const tbody = document.getElementById("history");
-      tbody.innerHTML = "";
-
-      if(rows.length === 0){
-        tbody.innerHTML = `
-          <tr>
-            <td colspan="4" style="text-align:center;color:#9ca3af">
-              No detections yet
-            </td>
-          </tr>`;
-        return;
-      }
-
-      rows.slice(-6).reverse().forEach(r=>{
-        tbody.innerHTML += `
-          <tr>
-            <td>${r.timestamp}</td>
-            <td>
-              ${r.snapshot
-                ? `<img class="thumb" src="/snapshots/${r.snapshot}">`
-                : "N/A"}
-            </td>
-            <td>${r.plate}</td>
-            <td>${r.blacklist} (${r.confidence}%)</td>
-          </tr>`;
-      });
-    }catch(e){}
+async function loadHistory(){
+  const w=timeFilter.value;
+  const rows=await fetch(`/history?window=${w}`).then(r=>r.json());
+  history.innerHTML="";
+  if(rows.length===0){
+    history.innerHTML="<tr><td colspan='4' style='text-align:center;color:#9ca3af'>No detections</td></tr>";
+    return;
   }
+  rows.slice(-10).reverse().forEach(r=>{
+    history.innerHTML+=`
+    <tr>
+      <td>${r.timestamp}</td>
+      <td>${r.snapshot?`<img class="thumb" src="/snapshots/${r.snapshot}">`:""}</td>
+      <td>${r.plate}</td>
+      <td>${r.blacklist} (${r.confidence}%)</td>
+    </tr>`;
+  });
+}
 
-  /* 📊 ANALYTICS */
-  async function loadStats(){
-    try{
-      const s = await fetch("/stats").then(r=>r.json());
+async function loadStats(){
+  const s=await fetch("/stats").then(r=>r.json());
+  statTotal.innerText=s.total;
+  statUnique.innerText=s.unique;
+  statBlacklist.innerText=s.blacklist;
+  statAPI.innerText=s.api;
+}
 
-      statTotal.innerText = s.total;
-      statUnique.innerText = s.unique;
-      statBlacklist.innerText = s.blacklist;
-
-      statAPI.innerText = s.api;
-      statAPI.style.color =
-        s.api === "OK" ? "#16a34a" :
-        s.api === "LIMITED" ? "#facc15" :
-        "#dc2626";
-    }catch(e){}
+async function loadTimeline(){
+  const e=await fetch("/timeline").then(r=>r.json());
+  timeline.innerHTML="";
+  if(e.length===0){
+    timeline.innerHTML="<li>No incidents detected</li>";
+    return;
   }
+  e.reverse().forEach(i=>{
+    timeline.innerHTML+=`
+    <li style="margin-bottom:12px">
+      <strong>${i.time}</strong> — ${i.event}<br>
+      ${i.snapshot?`<img src="/snapshots/${i.snapshot}" style="width:120px;border-radius:6px">`:""}
+    </li>`;
+  });
+}
 
-  /* INIT */
-  loadHistory();
-  loadStats();
-  setInterval(refreshLatest, 1000);
-  setInterval(loadHistory, 3000);
-  setInterval(loadStats, 3000);
+timeFilter.addEventListener("change",loadHistory);
+
+loadHistory();
+loadStats();
+loadTimeline();
+
+setInterval(refreshLatest,1000);
+setInterval(loadHistory,3000);
+setInterval(loadStats,3000);
+setInterval(loadTimeline,4000);
 
 });
 </script>
