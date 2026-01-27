@@ -21,3 +21,12 @@ __pycache__/
 .env
 snapshots/
 *.pt
+
+venv/
+.venv/
+__pycache__/
+*.pyc
+snapshots/
+*.pt
+logs.csv
+.env
