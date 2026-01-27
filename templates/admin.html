@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>CampusCar Admin | NIT Manipur</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body{
+  margin:0;
+  font-family:Inter,system-ui;
+  background:#0b1020;
+  color:#e5e7eb;
+}
+header{
+  padding:18px 28px;
+  border-bottom:1px solid #1f2937;
+  display:flex;
+  justify-content:space-between;
+}
+h1{margin:0;font-size:20px}
+button{
+  background:#2563eb;
+  border:none;
+  padding:10px 16px;
+  border-radius:8px;
+  color:white;
+  cursor:pointer;
+}
+.container{padding:26px;display:grid;gap:24px}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.card{
+  background:#111827;
+  border:1px solid #1f2937;
+  border-radius:14px;
+  padding:20px;
+}
+.stat{
+  font-size:28px;
+  font-weight:600;
+}
+.muted{color:#9ca3af;font-size:13px}
+footer{
+  text-align:center;
+  padding:14px;
+  border-top:1px solid #1f2937;
+  font-size:13px;
+  color:#9ca3af;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>🛡️ CampusCar – Admin Dashboard</h1>
+  <button onclick="exportCSV()">⬇ Export Logs</button>
+</header>
+
+<div class="container">
+
+  <!-- STATS -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="stat" id="total">0</div>
+      <div class="muted">Total Vehicles Today</div>
+    </div>
+    <div class="card">
+      <div class="stat" id="students">0</div>
+      <div class="muted">Student Vehicles</div>
+    </div>
+  </div>
+
+  <!-- CHART -->
+  <div class="card">
+    <canvas id="vehicleChart" height="120"></canvas>
+  </div>
+
+</div>
+
+<footer>
+  © 2026 NIT Manipur • CampusCar Admin
+</footer>
+
+<script>
+let chart;
+
+async function loadStats(){
+  const s = await fetch("/stats").then(r=>r.json());
+  total.innerText = s.total;
+  students.innerText = s.students;
+
+  if(chart) chart.destroy();
+
+  chart = new Chart(vehicleChart,{
+    type:"doughnut",
+    data:{
+      labels:["Students","Faculty","Visitors"],
+      datasets:[{
+        data:[s.students,s.faculty,s.total-(s.students+s.faculty)],
+        backgroundColor:["#22c55e","#3b82f6","#eab308"]
+      }]
+    }
+  });
+}
+
+function exportCSV(){
+  window.location.href="/admin/export";
+}
+
+loadStats();
+</script>
+
+</body>
+</html>

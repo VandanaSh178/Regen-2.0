@@ -1,62 +1,25 @@
-# 🚗 CampusCar – Automatic Number Plate Recognition (ANPR)
+# 🛡️ NIT Manipur: Smart Campus Security & ANPR System
 
-CampusCar is a real-time Automatic Number Plate Recognition (ANPR) system built for smart campus and gate-security use cases.
+An AI-powered Automated Number Plate Recognition (ANPR) system designed for campus security. This system uses computer vision to detect vehicles, verify credentials against a local database, and automate gate control.
 
----
+## 🚀 Key Features
+- **Real-time Detection:** Powered by YOLOv8 for high-speed plate localization.
+- **Character Recognition:** EasyOCR engine for precise plate text extraction.
+- **Admin SOC Dashboard:** Secure login for security officers to monitor live traffic.
+- **Vehicle Management:** CRUD (Create, Read, Update, Delete) functionality for authorized vehicles.
+- **Security Auditing:** Automated PDF report generation for official record-keeping.
+- **Instant Alerts:** Visual and data alerts for blacklisted or unauthorized vehicles.
 
-## 🔥 Features
-- Live camera feed (OpenCV)
-- Automatic number plate recognition
-- Indian number plate format validation
-- Time-based duplicate suppression
-- Blacklist detection with sound & flashing alert
-- Plate-only snapshot capture
-- Real-time dashboard (Flask)
-- Detection history & analytics panel
-- Secure API key handling using `.env`
+## 🛠️ Tech Stack
+- **Backend:** Flask (Python)
+- **AI/ML:** YOLOv8 (Ultralytics), EasyOCR
+- **Frontend:** HTML5, CSS3 (Modern Dark Theme), JavaScript (Vanilla)
+- **Database:** Flat-file Python dictionary for high-speed lookups
+- **Reporting:** ReportLab PDF Engine
 
----
+## 📥 Installation
 
-## 🧠 Tech Stack
-- Python
-- OpenCV
-- Flask
-- Plate Recognizer API
-- HTML / CSS / JavaScript
-
----
-
-## 📂 Project Structure
-backend/
-├── anpr.py
-├── app.py
-├── config.py
-├── logs.csv
-├── snapshots/
-└── templates/index.html
-
----
-
-## ▶️ How to Run
-
-```bash
-git clone https://github.com/VandanaSh178/Regen-2.0.git
-cd Regen-2.0
-pip install -r requirements.txt
-cd backend
-python app.py
-
----
-
-# ✅ 7️⃣ GITHUB COMMANDS (POWERSHELL SAFE – COPY–PASTE)
-
-Run from **project root**:
-
-```powershell
-Remove-Item -Recurse -Force .git
-git init
-git add .
-git commit -m "Initial commit: CampusCar ANPR system"
-git branch -M main
-git remote add origin https://github.com/VandanaSh178/Regen-2.0.git
-git push -u origin main
+1. **Clone the repository:**
+   ```bash
+   git clone <your-repo-link>
+   cd backend

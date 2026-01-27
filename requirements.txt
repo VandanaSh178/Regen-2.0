@@ -1,4 +1,8 @@
 flask
+flask-cors
 opencv-python
-requests
-numpy
+ultralytics
+easyocr
+reportlab
+werkzeug
+python-dotenv

@@ -1,171 +1,198 @@
-from flask import Flask, jsonify, render_template, Response, send_from_directory, request
-import threading, time, cv2, csv, os
+from flask import (
+    Flask, jsonify, render_template, Response,
+    send_from_directory, request, session, redirect
+)
+from functools import wraps
+from werkzeug.security import generate_password_hash, check_password_hash
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet
+import threading, time, cv2, csv, os, importlib, io
+
+# Import custom modules
 import anpr
-from datetime import datetime, timedelta
+import vehicle_db
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-LOG_FILE = os.path.join(BASE_DIR, "logs.csv")
-SNAP_DIR = os.path.join(BASE_DIR, "snapshots")
+# ================== 1. APP INIT ==================
+app = Flask(__name__, template_folder="../templates")
+app.secret_key = "nit-manipur-campuscar"
 
-app = Flask(__name__, template_folder="templates")
+# ================== 2. ADMIN CREDENTIALS ==================
+ADMIN_USER = "admin"
+# Password is 'nitmanipur@2026'
+ADMIN_PASSWORD_HASH = generate_password_hash("nitmanipur@2026")
 
-# ---------------- DASHBOARD ----------------
+# ================== 3. AUTH DECORATOR ==================
+def admin_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not session.get("admin"):
+            return redirect("/admin/login")
+        return f(*args, **kwargs)
+    return wrapper
+
+# ================== 4. DATABASE & LOGIC ==================
+
+def save_db_to_file():
+    """Helper to physically save the VEHICLE_DB dictionary to vehicle_db.py"""
+    with open("vehicle_db.py", "w") as f:
+        f.write(f"VEHICLE_DB = {vehicle_db.VEHICLE_DB}")
+    importlib.reload(vehicle_db)
+
+@app.route("/admin/get_vehicles")
+@admin_required
+def get_vehicles():
+    vehicles = []
+    for plate, info in vehicle_db.VEHICLE_DB.items():
+        vehicles.append({
+            "plate": plate,
+            "owner": info.get("owner", "Unknown"),
+            "type": info.get("type", "Visitor"),
+            "dept": info.get("dept", "N/A")
+        })
+    return jsonify(vehicles)
+
+@app.route("/admin/add_vehicle", methods=["POST"])
+@admin_required
+def add_vehicle_api():
+    data = request.json
+    plate = data.get("plate", "").strip().upper()
+    if not plate:
+        return jsonify({"success": False, "error": "Plate required"}), 400
+    
+    vehicle_db.VEHICLE_DB[plate] = {
+        "type": data.get("type", "Visitor"),
+        "owner": data.get("owner", "Unknown"),
+        "dept": data.get("dept", "N/A")
+    }
+    save_db_to_file()
+    return jsonify({"success": True})
+
+@app.route("/admin/delete_vehicle/<plate>", methods=["DELETE"])
+@admin_required
+def delete_vehicle(plate):
+    plate = plate.upper().strip()
+    if plate in vehicle_db.VEHICLE_DB:
+        del vehicle_db.VEHICLE_DB[plate]
+        save_db_to_file()
+        return jsonify({"success": True})
+    return jsonify({"success": False, "error": "Not found"}), 404
+
+# ================== 5. REPORTING (PDF) ==================
+
+@app.route("/admin/export_report")
+@admin_required
+def export_report():
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter)
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    elements.append(Paragraph("NIT Manipur - Campus Security Report", styles['Title']))
+    elements.append(Paragraph(f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal']))
+    elements.append(Paragraph("<br/><br/>", styles['Normal']))
+    
+    data = [["Timestamp", "Plate", "Category", "Confidence"]]
+    if os.path.exists("logs.csv"):
+        with open("logs.csv", "r") as f:
+            reader = list(csv.reader(f))
+            for row in reader[-50:]: # Last 50 detections
+                if len(row) >= 4:
+                    data.append([row[0], row[1], row[2], f"{row[3]}%"])
+    
+    t = Table(data)
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.cadetblue),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('GRID', (0,0), (-1,-1), 1, colors.grey),
+        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.whitesmoke, colors.lightgrey])
+    ]))
+    elements.append(t)
+    doc.build(elements)
+    buf.seek(0)
+    return Response(buf, mimetype='application/pdf', 
+                    headers={'Content-Disposition': 'attachment;filename=Security_Report.pdf'})
+
+# ================== 6. STREAMING & LOGS ==================
+
 @app.route("/")
-def dashboard():
+def home():
     return render_template("index.html")
 
-# ---------------- LIVE DETECTION ----------------
 @app.route("/latest")
 def latest():
-    return jsonify(anpr.latest_detection or {"status": "waiting"})
+    return jsonify(anpr.latest_detection or {})
 
-# ---------------- HISTORY ----------------
 @app.route("/history")
 def history():
-    window = request.args.get("window", "all")
-    now = datetime.now()
-
-    if window == "5m":
-        cutoff = now - timedelta(minutes=5)
-    elif window == "1h":
-        cutoff = now - timedelta(hours=1)
-    elif window == "today":
-        cutoff = datetime(now.year, now.month, now.day)
-    else:
-        cutoff = None
-
-    data = []
-
-    if not os.path.exists(LOG_FILE):
-        return jsonify(data)
-
-    with open(LOG_FILE, newline="") as f:
-        reader = csv.DictReader(f)
-
-        for row in reader:
-            ts_raw = row.get("timestamp", "")
-            if not ts_raw:
-                continue
-
-            try:
-                ts = datetime.strptime(ts_raw, "%Y-%m-%d %H:%M:%S")
-            except ValueError:
-                try:
-                    ts = datetime.strptime(ts_raw, "%Y-%m-%d %H:%M:%S.%f")
-                except ValueError:
-                    continue
-
-            if cutoff and ts < cutoff:
-                continue
-
-            data.append({
-                "timestamp": ts_raw,
-                "plate": row.get("plate", ""),
-                "blacklist": row.get("blacklist", ""),
-                "confidence": row.get("confidence", "N/A"),
-                "snapshot": row.get("snapshot", "")
-            })
-
-    return jsonify(data)
-
-# ---------------- ANALYTICS ----------------
-@app.route("/stats")
-def stats():
-    total = 0
-    unique = set()
-    blacklist_count = 0
-
-    if os.path.exists(LOG_FILE):
-        with open(LOG_FILE, newline="") as f:
-            reader = csv.reader(f)
-            rows = list(reader)
-
-            for r in rows[1:]:
-                if len(r) < 3:
-                    continue
-                total += 1
-                unique.add(r[1])
-                if r[2] == "YES":
-                    blacklist_count += 1
-
-    return jsonify({
-        "total": total,
-        "unique": len(unique),
-        "blacklist": blacklist_count,
-        "api": getattr(anpr, "api_status", "OK")
-    })
-
-# ---------------- INCIDENT TIMELINE ----------------
-@app.route("/timeline")
-def timeline():
-    events = []
-
-    if not os.path.exists(LOG_FILE):
-        return jsonify(events)
-
-    with open(LOG_FILE, newline="") as f:
-        reader = csv.DictReader(f)
-
-        for row in reader:
-            if row.get("blacklist") == "YES":
-                plate = row.get("plate", "")
-                ts = row.get("timestamp", "")
-                snapshot = row.get("snapshot", "")
-
-                events.append({
-                    "time": ts,
-                    "event": f"🚫 Blacklisted vehicle detected ({plate})",
-                    "snapshot": snapshot
-                })
-                events.append({
-                    "time": ts,
-                    "event": "📸 Snapshot captured",
-                    "snapshot": snapshot
-                })
-                events.append({
-                    "time": ts,
-                    "event": "🔔 Alert triggered",
-                    "snapshot": snapshot
-                })
-
-    return jsonify(events[-20:])
-
-# ---------------- SNAPSHOTS ----------------
-@app.route("/snapshots/<filename>")
-def snapshots(filename):
-    return send_from_directory(SNAP_DIR, filename)
-
-# ---------------- VIDEO STREAM ----------------
-def gen_frames():
-    while True:
-        if anpr.latest_frame is None:
-            time.sleep(0.03)
-            continue
-
-        ret, buffer = cv2.imencode(".jpg", anpr.latest_frame)
-        if not ret:
-            continue
-
-        yield (
-            b"--frame\r\n"
-            b"Content-Type: image/jpeg\r\n\r\n" +
-            buffer.tobytes() + b"\r\n"
-        )
+    rows = []
+    if os.path.exists("logs.csv"):
+        with open("logs.csv") as f:
+            for r in list(csv.reader(f))[1:]:
+                if len(r) < 5: continue
+                rows.append({"timestamp": r[0], "plate": r[1], "type": r[2], "confidence": r[3], "snapshot": r[4]})
+    return jsonify(rows)
 
 @app.route("/video_feed")
 def video_feed():
-    return Response(
-        gen_frames(),
-        mimetype="multipart/x-mixed-replace; boundary=frame"
-    )
+    def gen():
+        while True:
+            if anpr.latest_frame is None:
+                time.sleep(0.1); continue
+            _, buf = cv2.imencode(".jpg", anpr.latest_frame)
+            yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + buf.tobytes() + b"\r\n")
+    return Response(gen(), mimetype="multipart/x-mixed-replace; boundary=frame")
 
-# ---------------- START ANPR THREAD ----------------
+@app.route("/snapshots/<name>")
+def snapshots(name):
+    return send_from_directory("snapshots", name)
+
+@app.route("/stats")
+def stats():
+    total, students, faculty = 0, 0, 0
+    if os.path.exists("logs.csv"):
+        with open("logs.csv") as f:
+            reader = list(csv.reader(f))
+            for r in reader[1:]:
+                if len(r) < 3: continue
+                total += 1
+                if r[2] == "Student": students += 1
+                elif r[2] == "Faculty": faculty += 1
+    return jsonify({"total": total, "students": students, "faculty": faculty})
+
+# ================== 7. AUTH & DASHBOARD ==================
+
+@app.route("/admin/login", methods=["GET","POST"])
+def admin_login():
+    if request.method == "POST":
+        data = request.json
+        if data["username"] == ADMIN_USER and check_password_hash(ADMIN_PASSWORD_HASH, data["password"]):
+            session["admin"] = True
+            return jsonify({"success": True})
+        return jsonify({"success": False}), 401
+    return render_template("admin_login.html")
+
+@app.route("/admin/logout")
+def admin_logout():
+    session.clear()
+    return redirect("/")
+
+@app.route("/admin/dashboard")
+@admin_required
+def admin_dashboard():
+    return render_template("admin_dashboard.html")
+
+# ================== 8. ANPR THREAD ==================
+
 def start_anpr():
-    time.sleep(1)
-    anpr.main()
+    while True:
+        try:
+            anpr.main()
+        except Exception as e:
+            print("🔥 ANPR Error:", e)
+            time.sleep(5)
 
 if __name__ == "__main__":
-    os.makedirs(SNAP_DIR, exist_ok=True)
     threading.Thread(target=start_anpr, daemon=True).start()
-    print("🚀 Open dashboard at http://127.0.0.1:5000")
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)

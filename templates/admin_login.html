@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login | GateGuard AI – NIT Manipur</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg: #020617;
+            --glass: rgba(255, 255, 255, 0.03);
+            --border: rgba(255, 255, 255, 0.1);
+            --text: #ffffff;
+            --muted: #94a3b8;
+            --blue: #3b82f6;
+            --red: #ef4444;
+            --accent: #60a5fa;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            /* High-tech background effect */
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(26, 42, 108, 0.2) 0px, transparent 50%);
+            color: var(--text);
+            overflow: hidden;
+        }
+
+        /* Subtle grid pattern overlay */
+        body::before {
+            content: "";
+            position: absolute;
+            width: 100%; height: 100%;
+            background-image: radial-gradient(rgba(255,255,255,0.05) 1px, transparent 0);
+            background-size: 40px 40px;
+            z-index: -1;
+        }
+
+        .login-card {
+            width: 400px;
+            background: var(--glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            position: relative;
+        }
+
+        /* Top glow effect */
+        .login-card::after {
+            content: "";
+            position: absolute;
+            top: -1px; left: 20%; right: 20%; height: 1px;
+            background: linear-gradient(90deg, transparent, var(--blue), transparent);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .logo-icon {
+            background: linear-gradient(135deg, var(--blue), #1e40af);
+            width: 50px;
+            height: 50px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 15px;
+            font-size: 24px;
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+        }
+
+        h1 {
+            font-family: 'Montserrat';
+            font-size: 22px;
+            font-weight: 700;
+            margin: 0;
+            letter-spacing: -0.5px;
+        }
+
+        .header p {
+            font-size: 12px;
+            color: var(--muted);
+            margin: 5px 0 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--muted);
+            margin-bottom: 8px;
+            margin-left: 4px;
+        }
+
+        input {
+            width: 100%;
+            padding: 14px 16px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            color: white;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--blue);
+            background: rgba(0, 0, 0, 0.4);
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            margin-top: 10px;
+            border: none;
+            border-radius: 12px;
+            background: var(--blue);
+            color: white;
+            font-weight: 600;
+            font-size: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+
+        button:hover {
+            background: #2563eb;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 15px rgba(59, 130, 246, 0.4);
+        }
+
+        button:active { transform: translateY(0); }
+
+        .error-msg {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            color: var(--red);
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 13px;
+            text-align: center;
+            margin-top: 20px;
+            display: none;
+            animation: shake 0.4s ease;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            font-size: 11px;
+            color: var(--muted);
+            border-top: 1px solid var(--border);
+            padding-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="login-card">
+        <div class="header">
+            <div class="logo-icon">🛡️</div>
+            <h1>GateGuard Admin</h1>
+            <p>NIT Manipur Campus</p>
+        </div>
+
+        <div class="input-group">
+            <label for="username">Administrator ID</label>
+            <input type="text" id="username" placeholder="Enter username" spellcheck="false">
+        </div>
+
+        <div class="input-group">
+            <label for="password">Security Password</label>
+            <input type="password" id="password" placeholder="••••••••">
+        </div>
+
+        <button id="loginBtn" onclick="handleLogin()">Authorize Access</button>
+
+        <div id="error" class="error-msg">
+            Invalid credentials. Access Denied.
+        </div>
+
+        <div class="footer">
+            System version 1.0.4 <br>
+            Powered by YOLOv8 ANPR Engine
+        </div>
+    </div>
+
+    <script>
+        async function handleLogin() {
+            const user = document.getElementById("username").value;
+            const pass = document.getElementById("password").value;
+            const btn = document.getElementById("loginBtn");
+            const error = document.getElementById("error");
+
+            // UI Feedback
+            btn.innerText = "Authenticating...";
+            btn.style.opacity = "0.7";
+            error.style.display = "none";
+
+            try {
+                const res = await fetch("/admin/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ username: user, password: pass })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    // Success animation
+                    btn.innerText = "Access Granted";
+                    btn.style.background = "#22c55e";
+                    setTimeout(() => {
+                        window.location.href = "/admin/dashboard";
+                    }, 800);
+                } else {
+                    throw new Error();
+                }
+            } catch (err) {
+                btn.innerText = "Authorize Access";
+                btn.style.opacity = "1";
+                error.style.display = "block";
+            }
+        }
+
+        // Allow Enter key to submit
+        document.addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') handleLogin();
+        });
+    </script>
+
+</body>
+</html>
