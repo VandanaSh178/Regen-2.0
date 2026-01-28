@@ -169,7 +169,6 @@
             <a class="active" onclick="show('home', this)">🏠 Dashboard</a>
             <a onclick="show('blocked', this)">🚫 Blocked List</a>
             <a onclick="show('history', this)">🔍 Full History</a>
-            <a onclick="show('analytics', this)">📊 Analytics</a>
         </div>
         
         <div style="margin-top: auto; padding: 20px; background: var(--glass); border-radius: 15px;">
@@ -196,7 +195,7 @@
 
             <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 24px;">
                 <div class="panel" style="padding: 0; position: relative; overflow: hidden; border: 1px solid var(--blue);">
-                    <div style="position: absolute; top: 15px; left: 15px; background: rgba(239, 68, 68, 0.8); padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; z-index: 10;">● REC 0:00:24</div>
+                    <div style="position: absolute; top: 15px; left: 15px; background: rgba(239, 68, 68, 0.8); padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: bold; z-index: 10;">● LIVE FEED</div>
                     
                     <div id="scanBox" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 220px; height: 110px; border: 2px solid var(--green); z-index: 6; display: none;">
                         <div class="scan-line"></div>
@@ -227,11 +226,10 @@
                 <h2>Blacklisted Vehicles</h2>
                 <table>
                     <thead>
-                        <tr><th>Plate Number</th><th>Reason</th><th>Last Seen</th><th>Actions</th></tr>
+                        <tr><th>Plate Number</th><th>Reason</th><th>Last Seen</th></tr>
                     </thead>
-                    <tbody>
-                        <tr><td>MN 01 AG 5544</td><td>Unpaid Fines</td><td>2 hours ago</td><td><button style="color: var(--red); background: none; border: none; cursor: pointer;">Remove</button></td></tr>
-                    </tbody>
+                    <tbody id="blacklistBody">
+                        </tbody>
                 </table>
             </div>
         </div>
@@ -247,71 +245,137 @@
                 </table>
             </div>
         </div>
-
     </div>
 
     <script>
-        // Navigation
-        function show(id, el) {
-            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-            document.querySelectorAll('.menu a').forEach(a => a.classList.remove('active'));
-            document.getElementById(id).classList.add('active');
-            el.classList.add('active');
-        }
+        // --- DATA STATE ---
+let detectionLogs = [];
+let stats = { total: 0, auth: 0, block: 0 };
+let lastProcessedPlate = "";
+let lastProcessedTime = 0;
 
-        // Alert Control
-        function triggerAlert(plate, reason) {
-            document.getElementById("alertPlate").innerText = plate;
-            document.getElementById("alertReason").innerText = "REASON: " + reason;
-            document.getElementById("alertOverlay").style.display = "flex";
-        }
-        function closeAlert() {
-            document.getElementById("alertOverlay").style.display = "none";
-        }
+// --- NAVIGATION ---
+function show(id, el) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.menu a').forEach(a => a.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    el.classList.add('active');
+    
+    if(id === 'blocked') refreshBlacklist();
+}
 
-        // Simulate Metrics
-        function counter(id, end) {
-            let start = 0;
-            let obj = document.getElementById(id);
-            let timer = setInterval(() => {
-                start++;
-                obj.innerText = start;
-                if (start >= end) clearInterval(timer);
-            }, 20);
+// --- UI CONTROLS ---
+function triggerAlert(plate, reason) {
+    const overlay = document.getElementById("alertOverlay");
+    if (overlay.style.display !== "flex") { // Don't re-trigger if already open
+        document.getElementById("alertPlate").innerText = plate;
+        document.getElementById("alertReason").innerText = "REASON: " + (reason || "SECURITY BLACKLIST");
+        overlay.style.display = "flex";
+    }
+}
+
+function closeAlert() {
+    document.getElementById("alertOverlay").style.display = "none";
+}
+
+// --- LOGGING ENGINE ---
+function addLogEntry(data) {
+    const now = Date.now();
+    // Cooldown: Ignore the same plate if seen within the last 10 seconds
+    if (data.plate === lastProcessedPlate && (now - lastProcessedTime) < 10000) return;
+
+    lastProcessedPlate = data.plate;
+    lastProcessedTime = now;
+
+    const entry = {
+        time: new Date().toLocaleTimeString(),
+        plate: data.plate,
+        type: data.type || "Visitor",
+        conf: data.confidence || 0,
+        status: data.status
+    };
+
+    detectionLogs.unshift(entry);
+    if (detectionLogs.length > 50) detectionLogs.pop(); // Keep memory lean
+    
+    updateDashboard();
+}
+
+async function refreshBlacklist() {
+    // Fetches the current database to show who is currently banned
+    const res = await fetch('/admin/get_vehicles').then(r => r.json());
+    const blocked = res.filter(v => v.type === "Blacklist");
+    const body = document.getElementById("blacklistBody");
+    body.innerHTML = blocked.map(v => `
+        <tr>
+            <td style="font-weight:bold; color:var(--red);">${v.plate}</td>
+            <td>${v.dept || 'Security Risk'}</td>
+            <td>${new Date().toLocaleDateString()}</td>
+        </tr>
+    `).join('') || '<tr><td colspan="3" style="text-align:center;">No vehicles currently blacklisted</td></tr>';
+}
+
+function updateDashboard() {
+    // Update Counter Numbers
+    document.getElementById("m1").innerText = detectionLogs.length;
+    document.getElementById("m2").innerText = detectionLogs.filter(l => l.status !== 'BLOCK').length;
+    document.getElementById("m3").innerText = detectionLogs.filter(l => l.status === 'BLOCK').length;
+
+    // Update Mini History
+    const mini = document.getElementById("miniHistory");
+    mini.innerHTML = detectionLogs.slice(0, 5).map(log => `
+        <div style="background: rgba(255,255,255,0.05); padding: 12px; border-radius: 12px; margin-bottom: 10px; border-left: 4px solid ${log.status === 'BLOCK' ? 'var(--red)' : 'var(--green)'}; animation: fadeIn 0.3s ease;">
+            <div style="font-weight: 700; font-family: 'Montserrat';">${log.plate}</div>
+            <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">${log.time} • ${log.type}</div>
+        </div>
+    `).join('');
+
+    // Update Full History Table
+    const body = document.getElementById("historyBody");
+    body.innerHTML = detectionLogs.map(log => `
+        <tr>
+            <td>${log.time}</td>
+            <td style="font-family: 'Montserrat'; font-weight: 700;">${log.plate}</td>
+            <td><span class="status-pill" style="background: ${log.status === 'BLOCK' ? 'rgba(239,68,68,0.1)' : 'rgba(34,197,94,0.1)'}; color: ${log.status === 'BLOCK' ? 'var(--red)' : 'var(--green)'}">${log.type}</span></td>
+            <td>${log.conf}%</td>
+        </tr>
+    `).join('');
+}
+
+// --- API POLLING ---
+async function fetchSystemState() {
+    try {
+        const res = await fetch('/gate_status').then(r => r.json());
+        const gate = document.getElementById("gateStatus");
+        const scanBox = document.getElementById("scanBox");
+
+        if (res.plate && res.plate !== "----") {
+            addLogEntry(res);
+            scanBox.style.display = "block";
+
+            if (res.status === "BLOCK") {
+                gate.innerText = "GATE: LOCKED";
+                gate.className = "panel alert-border"; // You can add a CSS pulsing class
+                gate.style.color = "var(--red)";
+                gate.style.borderColor = "var(--red)";
+                triggerAlert(res.plate, res.reason);
+            } else {
+                gate.innerText = "GATE: OPENING";
+                gate.style.color = "var(--green)";
+                gate.style.borderColor = "var(--green)";
+            }
+        } else {
+            scanBox.style.display = "none";
+            gate.innerText = "GATE: CLOSED";
+            gate.style.color = "var(--yellow)";
+            gate.style.borderColor = "var(--yellow)";
         }
-        counter("m1", 128);
-        counter("m2", 114);
-        counter("m3", 14);
+    } catch (e) { 
+        console.log("Reconnecting to AI backend..."); 
+    }
+}
 
-        // API INTEGRATION (Mocked - Connect to your Python Flask)
-        async function fetchSystemState() {
-            try {
-                // Replace with your actual endpoints
-                const res = await fetch('/gate_status').then(r => r.json());
-                
-                const gate = document.getElementById("gateStatus");
-                const scanBox = document.getElementById("scanBox");
-
-                if (res.status === "BLOCK") {
-                    gate.innerText = "GATE: LOCKED";
-                    gate.style.borderColor = "var(--red)";
-                    gate.style.color = "var(--red)";
-                    scanBox.style.display = "block";
-                    triggerAlert(res.plate, res.reason);
-                } else if (res.status === "ALLOW") {
-                    gate.innerText = "GATE: OPENING";
-                    gate.style.borderColor = "var(--green)";
-                    gate.style.color = "var(--green)";
-                    scanBox.style.display = "block";
-                    closeAlert();
-                } else {
-                    scanBox.style.display = "none";
-                }
-            } catch (e) { console.log("Waiting for backend..."); }
-        }
-
-        // Refresh Loop
-        setInterval(fetchSystemState, 1000);
+setInterval(fetchSystemState, 1000);
     </script>
 </body>
 </html>

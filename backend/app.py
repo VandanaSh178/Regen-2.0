@@ -14,6 +14,7 @@ import threading, time, cv2, csv, os, importlib, io
 import anpr
 import vehicle_db
 
+
 # ================== 1. APP INIT ==================
 app = Flask(__name__, template_folder="../templates")
 app.secret_key = "nit-manipur-campuscar"
@@ -150,16 +151,29 @@ def snapshots(name):
 
 @app.route("/stats")
 def stats():
-    total, students, faculty = 0, 0, 0
+    total, students, faculty, blocked = 0, 0, 0, 0
+    
     if os.path.exists("logs.csv"):
         with open("logs.csv") as f:
             reader = list(csv.reader(f))
             for r in reader[1:]:
                 if len(r) < 3: continue
                 total += 1
-                if r[2] == "Student": students += 1
-                elif r[2] == "Faculty": faculty += 1
-    return jsonify({"total": total, "students": students, "faculty": faculty})
+                cat = r[2]
+                if cat == "Student": students += 1
+                elif cat == "Faculty": faculty += 1
+                elif cat == "Blacklist": blocked += 1
+    
+    # We calculate 'authorized' as total detections minus blocked ones
+    return jsonify({
+        "total": total,
+        "students": students,
+        "faculty": faculty,
+        "authorized": total - blocked,
+        "blocked": blocked
+    })
+    
+    
 
 # ================== 7. AUTH & DASHBOARD ==================
 
@@ -177,6 +191,27 @@ def admin_login():
 def admin_logout():
     session.clear()
     return redirect("/")
+
+
+
+from gate_controller import gate_manager
+
+@app.route("/gate_status")
+def gate_status():
+    raw_data = anpr.latest_detection or {}
+    plate = raw_data.get("plate", "----")
+    confidence = raw_data.get("confidence", 0)
+
+    # All logic happens in the gate_controller
+    status, v_type, reason = gate_manager.evaluate_access(plate, confidence)
+
+    return jsonify({
+        "plate": plate,
+        "type": v_type,
+        "confidence": confidence,
+        "status": status,
+        "reason": reason
+    })
 
 @app.route("/admin/dashboard")
 @admin_required
