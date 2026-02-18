@@ -4,24 +4,19 @@ from flask import (
 )
 from functools import wraps
 from werkzeug.security import generate_password_hash, check_password_hash
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
-from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet
 import threading, time, cv2, csv, os, importlib, io
 
 # Import custom modules
 import anpr
 import vehicle_db
-
+from gate_controller import gate_manager
 
 # ================== 1. APP INIT ==================
-app = Flask(__name__, template_folder="../templates")
-app.secret_key = "nit-manipur-campuscar"
+app = Flask(__name__, template_folder="../templates", static_folder="../static")
+app.secret_key = "nit-manipur-astra-security"
 
 # ================== 2. ADMIN CREDENTIALS ==================
 ADMIN_USER = "admin"
-# Password is 'nitmanipur@2026'
 ADMIN_PASSWORD_HASH = generate_password_hash("nitmanipur@2026")
 
 # ================== 3. AUTH DECORATOR ==================
@@ -33,13 +28,110 @@ def admin_required(f):
         return f(*args, **kwargs)
     return wrapper
 
-# ================== 4. DATABASE & LOGIC ==================
+# about
+@app.route("/about")
+def about():
+    """Serves the technical specifications and project overview"""
+    return render_template("about.html")
 
-def save_db_to_file():
-    """Helper to physically save the VEHICLE_DB dictionary to vehicle_db.py"""
-    with open("vehicle_db.py", "w") as f:
-        f.write(f"VEHICLE_DB = {vehicle_db.VEHICLE_DB}")
-    importlib.reload(vehicle_db)
+# ================== 4. CORE PUBLIC ROUTES ==================
+# ================== 4. CORE PUBLIC ROUTES ==================
+
+@app.route("/")
+def hero():
+    """Serves the professional Astra Hero/Intro Page"""
+    return render_template("hero.html")
+
+@app.route("/dashboard")
+def home():
+    """Serves the professional Astra Dashboard"""
+    # Note: This was originally your "/" route. 
+    # We moved it so the Hero page can play first.
+    return render_template("index.html")
+
+# @app.route("/")
+# def home():
+#     """Serves the professional Astra Dashboard"""
+#     return render_template("index.html")
+
+@app.route("/video_feed")
+def video_feed():
+    """Streams the camera feed to the dashboard HUD"""
+    def gen():
+        while True:
+            if anpr.latest_frame is None:
+                time.sleep(0.1)
+                continue
+            _, buf = cv2.imencode(".jpg", anpr.latest_frame)
+            yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + buf.tobytes() + b"\r\n")
+    return Response(gen(), mimetype="multipart/x-mixed-replace; boundary=frame")
+
+@app.route("/gate_status")
+def gate_status():
+    try:
+        raw_data = anpr.latest_detection or {}
+        plate = raw_data.get("plate", "----")
+        confidence = raw_data.get("confidence", 0)
+        status, v_type, reason = gate_manager.evaluate_access(plate, confidence)
+
+        return jsonify({
+            "plate": plate,
+            "type": v_type,
+            "confidence": confidence,
+            "status": status,
+            "reason": reason
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/history")
+def history():
+    rows = []
+    if os.path.exists("logs.csv"):
+        with open("logs.csv", "r") as f:
+            reader = csv.reader(f)
+            next(reader, None)
+            for r in list(reader):
+                if len(r) < 4: continue
+                rows.append({
+                    "timestamp": r[0], 
+                    "plate": r[1], 
+                    "type": r[2], 
+                    "confidence": r[3],
+                    "snapshot": r[4] if len(r) > 4 else "" 
+                })
+    return jsonify(rows[::-1])
+
+@app.route("/snapshots/<path:filename>")
+def serve_snapshot(filename):
+    return send_from_directory("snapshots", filename)
+
+# ================== 5. ADMIN AUTH & LOGIC ==================
+
+@app.route("/admin/login", methods=["GET", "POST"])
+def admin_login():
+    if request.method == "POST":
+        data = request.json if request.is_json else request.form
+        username = data.get("username")
+        password = data.get("password")
+
+        if username == ADMIN_USER and check_password_hash(ADMIN_PASSWORD_HASH, password):
+            session["admin"] = True
+            return jsonify({"success": True})
+        return jsonify({"success": False, "message": "Invalid Credentials"}), 401
+    return render_template("admin_login.html")
+
+@app.route("/admin/dashboard")
+@admin_required
+def admin_dashboard():
+    return render_template("admin_dashboard.html")
+
+@app.route("/admin/logout")
+def admin_logout():
+    session.clear()
+    return redirect("/")
+
+# ================== 6. DATABASE ACTIONS ==================
 
 @app.route("/admin/get_vehicles")
 @admin_required
@@ -53,6 +145,11 @@ def get_vehicles():
             "dept": info.get("dept", "N/A")
         })
     return jsonify(vehicles)
+
+def save_db_to_file():
+    with open("vehicle_db.py", "w") as f:
+        f.write(f"VEHICLE_DB = {vehicle_db.VEHICLE_DB}")
+    importlib.reload(vehicle_db)
 
 @app.route("/admin/add_vehicle", methods=["POST"])
 @admin_required
@@ -70,6 +167,8 @@ def add_vehicle_api():
     save_db_to_file()
     return jsonify({"success": True})
 
+
+
 @app.route("/admin/delete_vehicle/<plate>", methods=["DELETE"])
 @admin_required
 def delete_vehicle(plate):
@@ -78,83 +177,13 @@ def delete_vehicle(plate):
         del vehicle_db.VEHICLE_DB[plate]
         save_db_to_file()
         return jsonify({"success": True})
-    return jsonify({"success": False, "error": "Not found"}), 404
-
-# ================== 5. REPORTING (PDF) ==================
-
-@app.route("/admin/export_report")
-@admin_required
-def export_report():
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=letter)
-    elements = []
-    styles = getSampleStyleSheet()
-    
-    elements.append(Paragraph("NIT Manipur - Campus Security Report", styles['Title']))
-    elements.append(Paragraph(f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal']))
-    elements.append(Paragraph("<br/><br/>", styles['Normal']))
-    
-    data = [["Timestamp", "Plate", "Category", "Confidence"]]
-    if os.path.exists("logs.csv"):
-        with open("logs.csv", "r") as f:
-            reader = list(csv.reader(f))
-            for row in reader[-50:]: # Last 50 detections
-                if len(row) >= 4:
-                    data.append([row[0], row[1], row[2], f"{row[3]}%"])
-    
-    t = Table(data)
-    t.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,0), colors.cadetblue),
-        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
-        ('GRID', (0,0), (-1,-1), 1, colors.grey),
-        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.whitesmoke, colors.lightgrey])
-    ]))
-    elements.append(t)
-    doc.build(elements)
-    buf.seek(0)
-    return Response(buf, mimetype='application/pdf', 
-                    headers={'Content-Disposition': 'attachment;filename=Security_Report.pdf'})
-
-# ================== 6. STREAMING & LOGS ==================
-
-@app.route("/")
-def home():
-    return render_template("index.html")
-
-@app.route("/latest")
-def latest():
-    return jsonify(anpr.latest_detection or {})
-
-@app.route("/history")
-def history():
-    rows = []
-    if os.path.exists("logs.csv"):
-        with open("logs.csv") as f:
-            for r in list(csv.reader(f))[1:]:
-                if len(r) < 5: continue
-                rows.append({"timestamp": r[0], "plate": r[1], "type": r[2], "confidence": r[3], "snapshot": r[4]})
-    return jsonify(rows)
-
-@app.route("/video_feed")
-def video_feed():
-    def gen():
-        while True:
-            if anpr.latest_frame is None:
-                time.sleep(0.1); continue
-            _, buf = cv2.imencode(".jpg", anpr.latest_frame)
-            yield (b"--frame\r\nContent-Type: image/jpeg\r\n\r\n" + buf.tobytes() + b"\r\n")
-    return Response(gen(), mimetype="multipart/x-mixed-replace; boundary=frame")
-
-@app.route("/snapshots/<name>")
-def snapshots(name):
-    return send_from_directory("snapshots", name)
+    return jsonify({"success": False, "error": "Vehicle not found"}), 404
 
 @app.route("/stats")
-def stats():
-    total, students, faculty, blocked = 0, 0, 0, 0
-    
+def get_stats():
+    total, students, faculty, official = 0, 0, 0, 0
     if os.path.exists("logs.csv"):
-        with open("logs.csv") as f:
+        with open("logs.csv", "r") as f:
             reader = list(csv.reader(f))
             for r in reader[1:]:
                 if len(r) < 3: continue
@@ -162,72 +191,45 @@ def stats():
                 cat = r[2]
                 if cat == "Student": students += 1
                 elif cat == "Faculty": faculty += 1
-                elif cat == "Blacklist": blocked += 1
-    
-    # We calculate 'authorized' as total detections minus blocked ones
-    return jsonify({
-        "total": total,
-        "students": students,
-        "faculty": faculty,
-        "authorized": total - blocked,
-        "blocked": blocked
-    })
-    
-    
+                else: official += 1
+    return jsonify({"total": total, "students": students, "faculty": faculty, "official": official})
 
-# ================== 7. AUTH & DASHBOARD ==================
-
-@app.route("/admin/login", methods=["GET","POST"])
-def admin_login():
-    if request.method == "POST":
-        data = request.json
-        if data["username"] == ADMIN_USER and check_password_hash(ADMIN_PASSWORD_HASH, data["password"]):
-            session["admin"] = True
-            return jsonify({"success": True})
-        return jsonify({"success": False}), 401
-    return render_template("admin_login.html")
-
-@app.route("/admin/logout")
-def admin_logout():
-    session.clear()
-    return redirect("/")
-
-
-
-from gate_controller import gate_manager
-
-@app.route("/gate_status")
-def gate_status():
-    raw_data = anpr.latest_detection or {}
-    plate = raw_data.get("plate", "----")
-    confidence = raw_data.get("confidence", 0)
-
-    # All logic happens in the gate_controller
-    status, v_type, reason = gate_manager.evaluate_access(plate, confidence)
-
-    return jsonify({
-        "plate": plate,
-        "type": v_type,
-        "confidence": confidence,
-        "status": status,
-        "reason": reason
-    })
-
-@app.route("/admin/dashboard")
+@app.route("/admin/export_excel")
 @admin_required
-def admin_dashboard():
-    return render_template("admin_dashboard.html")
+def export_excel():
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Timestamp', 'License Plate', 'Vehicle Category', 'Confidence %', 'Entry Status'])
+    
+    if os.path.exists("logs.csv"):
+        with open("logs.csv", "r") as f:
+            reader = csv.reader(f)
+            next(reader, None)
+            for row in reader:
+                status = "DENIED" if row[2] == "Blacklist" else "AUTHORIZED"
+                writer.writerow([row[0], row[1], row[2], f"{row[3]}%", status])
+    
+    output.seek(0)
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=Astra_Security_Report_2026.csv"}
+    )
 
-# ================== 8. ANPR THREAD ==================
+# ================== 7. BACKGROUND THREAD & MAIN ==================
 
 def start_anpr():
+    print("🚀 Astra AI Core Initializing...")
     while True:
         try:
             anpr.main()
         except Exception as e:
-            print("🔥 ANPR Error:", e)
+            print(f"🔥 AI Core Error: {e}")
             time.sleep(5)
 
 if __name__ == "__main__":
+    if not os.path.exists("snapshots"):
+        os.makedirs("snapshots")
     threading.Thread(target=start_anpr, daemon=True).start()
+    print("✅ System Online at http://localhost:5000")
     app.run(host="0.0.0.0", port=5000, debug=False, threaded=True)

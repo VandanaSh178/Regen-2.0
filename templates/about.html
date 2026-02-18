@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Astra | The Neural Shield</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;900&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+
+    <style>
+        :root {
+            --bg: #030712;
+            --accent: #3b82f6;
+            --danger: #ef4444;
+            --glass: rgba(255, 255, 255, 0.02);
+            --border: rgba(255, 255, 255, 0.08);
+        }
+
+        body {
+            background: var(--bg);
+            color: #f8fafc;
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            overflow-x: hidden;
+        }
+
+        /* 3D DATA STREAM BACKGROUND */
+        #matrix-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1;
+            opacity: 0.15;
+            pointer-events: none;
+        }
+
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 40px; }
+
+        /* HERO SECTION */
+        .hero {
+            height: 90vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: radial-gradient(circle at center, rgba(59, 130, 246, 0.1) 0%, transparent 70%);
+        }
+
+        .hero h1 {
+            font-family: 'Montserrat';
+            font-size: clamp(4rem, 12vw, 8rem);
+            margin: 0;
+            letter-spacing: -5px;
+            background: linear-gradient(to bottom, #fff 30%, var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* COMPARISON SECTION */
+        .comparison {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 100px 0;
+        }
+
+        .comp-card {
+            padding: 40px;
+            border-radius: 24px;
+            border: 1px solid var(--border);
+            background: var(--glass);
+        }
+
+        .comp-card.old { border-left: 4px solid var(--danger); }
+        .comp-card.new { border-left: 4px solid var(--accent); box-shadow: 0 0 30px rgba(59, 130, 246, 0.1); }
+
+        /* FEATURE ICONS */
+        .feature-icon {
+            width: 60px; height: 60px;
+            background: var(--accent);
+            border-radius: 12px;
+            display: flex;
+            align-items: center; justify-content: center;
+            font-size: 24px; margin-bottom: 20px;
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+        }
+
+        /* 3D TECH STACK GRID */
+        .stack-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            perspective: 1000px;
+        }
+
+        .stack-item {
+            background: var(--glass);
+            border: 1px solid var(--border);
+            padding: 30px;
+            border-radius: 20px;
+            transition: 0.5s;
+            transform-style: preserve-3d;
+        }
+
+        .stack-item:hover {
+            transform: translateZ(20px) rotateX(10deg);
+            background: rgba(255,255,255,0.05);
+            border-color: var(--accent);
+        }
+
+        /* SYSTEM PULSE HUD */
+        .hud-stat {
+            position: fixed;
+            bottom: 40px; right: 40px;
+            background: rgba(0,0,0,0.8);
+            border: 1px solid var(--accent);
+            padding: 15px 25px;
+            border-radius: 12px;
+            font-family: monospace;
+            font-size: 12px;
+            color: var(--accent);
+            z-index: 100;
+        }
+
+        h2 { font-family: 'Montserrat'; font-size: 2.5rem; margin-bottom: 40px; }
+        .highlight { color: var(--accent); }
+        /* GLOBAL NAVIGATION */
+.nav-header {
+    position: fixed;
+    top: 0; left: 0; width: 100%;
+    padding: 20px 50px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(2, 6, 23, 0.8);
+    backdrop-filter: blur(15px);
+    border-bottom: 1px solid var(--border);
+    z-index: 1000;
+}
+
+.nav-logo {
+    font-family: 'Montserrat';
+    font-weight: 900;
+    font-size: 24px;
+    color: #fff;
+    text-decoration: none;
+    letter-spacing: 2px;
+}
+
+.nav-logo span { color: var(--accent); }
+
+.nav-links { display: flex; gap: 30px; }
+
+.nav-links a {
+    text-decoration: none;
+    color: #94a3b8;
+    font-size: 14px;
+    font-weight: 500;
+    transition: 0.3s;
+}
+
+.nav-links a:hover, .nav-links a.active { color: var(--accent); }
+
+/* GLOBAL FOOTER */
+.site-footer {
+    background: #010409;
+    padding: 60px 0 30px;
+    border-top: 1px solid var(--border);
+    margin-top: 100px;
+}
+
+.footer-content {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 50px;
+    margin-bottom: 40px;
+}
+
+.footer-brand h3 { font-family: 'Montserrat'; margin-bottom: 15px; }
+.footer-brand p { color: #94a3b8; font-size: 14px; line-height: 1.6; }
+
+.footer-links h4 { font-size: 16px; margin-bottom: 20px; color: var(--accent); }
+.footer-links ul { list-style: none; padding: 0; }
+.footer-links li { margin-bottom: 10px; }
+.footer-links a { color: #94a3b8; text-decoration: none; font-size: 14px; transition: 0.3s; }
+.footer-links a:hover { color: #fff; }
+
+.footer-bottom {
+    text-align: center;
+    padding-top: 30px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    color: #475569;
+    font-size: 12px;
+}
+    </style>
+</head>
+<body>
+
+  <header class="nav-header">
+    <a href="/" class="nav-logo">ASTRA<span>.AI</span></a>
+    <nav class="nav-links">
+        <a href="/">DASHBOARD</a>
+        <a href="/about">ABOUT TECH</a>
+        <a href="/admin/login" style="border: 1px solid var(--accent); padding: 5px 15px; border-radius: 20px;">ADMIN LOGIN</a>
+    </nav>
+</header>
+
+    <canvas id="matrix-bg"></canvas>
+
+    <div class="hud-stat">
+        CORE_LOAD: <span id="cpu-val">24</span>%<br>
+        AI_LATENCY: <span id="lat-val">182</span>ms<br>
+        STATUS: <span style="color:#22c55e">OPTIMIZED</span>
+    </div>
+
+    <div class="container">
+        <section class="hero" data-aos="zoom-in">
+            <h1>ASTRA</h1>
+            <p style="font-size: 1.5rem; font-weight: 300; letter-spacing: 2px;">SECURE. AUTOMATE. PROTECT.</p>
+        </section>
+
+        <h2 style="text-align:center">The Evolution of <span class="highlight">Security</span></h2>
+        
+        <div class="comparison">
+            <div class="comp-card old" data-aos="fade-right">
+                <h3 style="color:var(--danger)">Before Astra (Manual)</h3>
+                <ul style="color:#94a3b8">
+                    <li>Slow handwriting entry logs</li>
+                    <li>No real-time verification</li>
+                    <li>Human error & forged IDs</li>
+                    <li>Zero searchable history</li>
+                </ul>
+            </div>
+            <div class="comp-card new" data-aos="fade-left">
+                <h3 style="color:var(--accent)">After Astra (Autonomous)</h3>
+                <ul style="color:#fff">
+                    <li>Instant AI Plate recognition</li>
+                    <li>Automatic Blacklist triggers</li>
+                    <li>Encrypted Digital Audits</li>
+                    <li>24/7 Unattended Monitoring</li>
+                </ul>
+            </div>
+        </div>
+
+        <section style="margin: 100px 0;">
+            <h2 style="text-align:center">Neural <span class="highlight">Pipeline</span></h2>
+            
+            <div class="stack-grid">
+                <div class="stack-item" data-aos="fade-up">
+                    <div class="feature-icon">🔍</div>
+                    <h3>Vision Core</h3>
+                    <p>Uses YOLOv8 (You Only Look Once) to segment vehicle objects from complex campus backgrounds.</p>
+                </div>
+                <div class="stack-item" data-aos="fade-up" data-aos-delay="100">
+                    <div class="feature-icon">⌨️</div>
+                    <h3>OCR Engine</h3>
+                    <p>EasyOCR processes spatial pixel data into alphanumeric strings for database matching.</p>
+                </div>
+                <div class="stack-item" data-aos="fade-up" data-aos-delay="200">
+                    <div class="feature-icon">📂</div>
+                    <h3>Logic Controller</h3>
+                    <p>Flask-based backend manages permissions and triggers gate relays via GateGuard logic.</p>
+                </div>
+            </div>
+        </section>
+
+        <section style="text-align: center; padding: 60px; background: var(--glass); border-radius: 40px; margin-bottom: 100px;">
+            <h2>System <span class="highlight">Architecture</span></h2>
+            
+            <p style="color:#94a3b8; max-width: 800px; margin: 20px auto;">Astra operates on a multi-threaded Python architecture, allowing simultaneous camera streaming, AI inference, and dashboard rendering without performance degradation.</p>
+        </section>
+
+        <footer style="padding: 100px 0; text-align: center;">
+            <p style="color: var(--border);">Designed for NIT Manipur Security Operations</p>
+            <a href="/" style="text-decoration: none; color: var(--accent); border: 1px solid var(--accent); padding: 10px 30px; border-radius: 30px;">RETURN TO SOC</a>
+        </footer>
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+    <script>
+        AOS.init({ duration: 800 });
+
+        // HUD PULSE SCRIPT
+        setInterval(() => {
+            document.getElementById('cpu-val').innerText = Math.floor(Math.random() * (28 - 22) + 22);
+            document.getElementById('lat-val').innerText = Math.floor(Math.random() * (210 - 170) + 170);
+        }, 2000);
+
+        // MATRIX BACKGROUND SCRIPT
+        const canvas = document.getElementById('matrix-bg');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        const letters = "0101010101ASTRA";
+        const fontSize = 16;
+        const columns = canvas.width / fontSize;
+        const drops = Array(Math.floor(columns)).fill(1);
+
+        function draw() {
+            ctx.fillStyle = "rgba(3, 7, 18, 0.05)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "#3b82f6";
+            ctx.font = fontSize + "px monospace";
+            for (let i = 0; i < drops.length; i++) {
+                const text = letters.charAt(Math.floor(Math.random() * letters.length));
+                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
+                drops[i]++;
+            }
+        }
+        setInterval(draw, 33);
+    </script>
+
+    <footer class="site-footer">
+    <div class="container">
+        <div class="footer-content">
+            <div class="footer-brand">
+                <h3>🛡️ NIT Manipur Security</h3>
+                <p>Astra is an advanced Automated Number Plate Recognition (ANPR) system designed specifically for the unique security needs of the NIT Manipur campus perimeter.</p>
+            </div>
+            <div class="footer-links">
+                <h4>System</h4>
+                <ul>
+                    <li><a href="/">Live Terminal</a></li>
+                    <li><a href="/about">Technical Specs</a></li>
+                    <li><a href="/gate_status">API Status</a></li>
+                </ul>
+            </div>
+            <div class="footer-links">
+                <h4>Support</h4>
+                <ul>
+                    <li><a href="#">Admin Guide</a></li>
+                    <li><a href="#">Report Issue</a></li>
+                    <li><a href="#">Contact Security</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            &copy; 2026 NIT Manipur Astra Project. Built with YOLOv8 & Flask.
+        </div>
+    </div>
+</footer>
+</body>
+</html>
